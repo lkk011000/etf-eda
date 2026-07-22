@@ -1,0 +1,49 @@
+# ==========================================
+# Git Ignore Rules for ETF EDA Dashboard
+# ==========================================
+
+# 1. Hidden Directories & Agent Rules (숨김 폴더 및 에이전트 전용 폴더)
+.venv/
+.agents/
+.streamlit/
+.idea/
+.vscode/
+.*_cache/
+
+# 2. Virtual Environment Patterns (기타 가상환경 폴더)
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# 3. Python Bytecode & Cache Files (파이썬 컴파일 및 캐시 파일)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 4. Data & Output Files (원천 데이터 및 수집 데이터 파일)
+data/*.csv
+data/*.xlsx
+data/*.parquet
+data/*.json
+*.csv
+
+# 5. Environment Variables & Credentials (보안 및 환경변수)
+.env
+.env.local
+.env.*
+
+# 6. System & OS Files (운영체제 자동 생성 파일)
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+
+# 7. Log Files (로그 파일)
+*.log
