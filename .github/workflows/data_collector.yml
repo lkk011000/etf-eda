@@ -1,0 +1,46 @@
+name: Realtime ETF Data Collector
+
+on:
+  schedule:
+    # 1분에 1회 스케줄 설정 (참고: GitHub Actions 정책상 실제 스케줄러 실행 간격은 보통 3~5분 단위로 큐잉됩니다)
+    - cron: "* * * * *"
+  workflow_dispatch: # 수동 즉시 실행 가능
+
+permissions:
+  contents: write
+
+jobs:
+  collect-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas requests
+
+      - name: Run ETF Data Collection Script
+        run: |
+          python src/collect_etf.py
+
+      - name: Commit and push collected data
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "auto: 네이버 ETF 실시간 데이터 수집 및 저장 (data/)"
+            git push
+          fi

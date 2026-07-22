@@ -26,12 +26,11 @@ __pycache__/
 .coverage
 htmlcov/
 
-# 4. Data & Output Files (원천 데이터 및 수집 데이터 파일)
-data/*.csv
-data/*.xlsx
-data/*.parquet
-data/*.json
-*.csv
+# 4. Data & Output Files (GitHub 저장소 data/ 폴더 내 수집 데이터 저장 허용)
+!data/
+!data/*.csv
+!data/*.json
+!data/*.parquet
 
 # 5. Environment Variables & Credentials (보안 및 환경변수)
 .env
