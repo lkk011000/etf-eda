@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>네이버 금융 실시간 ETF EDA 대시보드</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Plotly.js CDN -->
+    <script src="https://cdn.plot.ly/plotly-2.29.0.min.js"></script>
+    <!-- FontAwesome CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        darkbg: '#0f172a',
+                        cardbg: '#1e293b',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-panel:hover {
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+        .tab-btn.active {
+            color: #3b82f6;
+            border-bottom: 2px solid #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        /* Plotly dark mode tweaks */
+        .js-plotly-plot .plotly .modebar {
+            left: 10px !important;
+            top: 10px !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col custom-scrollbar">
+
+    <!-- Header Bar -->
+    <header class="glass-panel sticky top-0 z-50 px-6 py-4 border-b border-slate-700/50 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
+                    <i class="fa-solid me-1 fa-chart-line text-2xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+                        네이버 금융 실시간 ETF EDA 대시보드
+                    </h1>
+                    <p class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                        <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>서버 없이 100% 클라이언트 실시간 수집</span> | 
+                        <span id="last-updated-time">수집 준비 중...</span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button id="refresh-btn" onclick="fetchLiveEtfData()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition-all shadow-md shadow-blue-600/20 flex items-center gap-2 active:scale-95">
+                    <i class="fa-solid fa-arrows-rotate" id="refresh-icon"></i>
+                    <span>실시간 수집 갱신</span>
+                </button>
+                <button onclick="exportToCSV()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-sm font-semibold transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-file-csv text-emerald-400"></i>
+                    <span>CSV 다운로드</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full space-y-6">
+
+        <!-- KPI Header Cards -->
+        <section class="grid grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4">
+            <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>검색/필터 종목 수</span>
+                    <i class="fa-solid fa-list-check text-blue-400"></i>
+                </div>
+                <div class="mt-2">
+                    <div class="text-xl sm:text-2xl font-bold text-white" id="kpi-count">0 <span class="text-xs text-slate-400 font-normal">개</span></div>
+                    <div class="text-xs text-slate-400 mt-1" id="kpi-count-sub">전체 0개 종목 중</div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>총 시가총액 합계</span>
+                    <i class="fa-solid fa-coins text-amber-400"></i>
+                </div>
+                <div class="mt-2">
+                    <div class="text-xl sm:text-2xl font-bold text-amber-400" id="kpi-market-sum">0 <span class="text-xs font-normal text-slate-300">억</span></div>
+                    <div class="text-xs text-slate-400 mt-1">필터링 종목 시총</div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>평균 등락률</span>
+                    <i class="fa-solid fa-arrow-trend-up text-emerald-400"></i>
+                </div>
+                <div class="mt-2">
+                    <div class="text-xl sm:text-2xl font-bold" id="kpi-avg-rate">0.00%</div>
+                    <div class="text-xs text-slate-400 mt-1">필터링 산술 평균</div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-4 rounded-xl flex flex-col justify-between">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>상승 / 하락 종목</span>
+                    <i class="fa-solid fa-scale-balanced text-purple-400"></i>
+                </div>
+                <div class="mt-2">
+                    <div class="text-base sm:text-lg font-bold flex items-center gap-1.5">
+                        <span class="text-rose-400" id="kpi-rise-cnt">0</span>
+                        <span class="text-slate-500">/</span>
+                        <span class="text-blue-400" id="kpi-fall-cnt">0</span>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1">상승 vs 하락 비율</div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-4 rounded-xl flex flex-col justify-between col-span-2 md:col-span-1">
+                <div class="flex items-center justify-between text-slate-400 text-xs font-medium">
+                    <span>당일 총 거래대금</span>
+                    <i class="fa-solid fa-money-bill-transfer text-emerald-400"></i>
+                </div>
+                <div class="mt-2">
+                    <div class="text-xl sm:text-2xl font-bold text-emerald-400" id="kpi-total-amount">0 <span class="text-xs font-normal text-slate-300">억</span></div>
+                    <div class="text-xs text-slate-400 mt-1">합계 거래대금</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Filters Section -->
+        <section class="glass-panel p-4 sm:p-5 rounded-xl space-y-4">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-700/60 pb-3">
+                <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-filter text-blue-400"></i>
+                    <span>동적 다차원 데이터 필터</span>
+                </h2>
+                <button onclick="resetFilters()" class="text-xs text-slate-400 hover:text-blue-400 flex items-center gap-1 transition-colors">
+                    <i class="fa-solid fa-rotate-left"></i> 필터 초기화
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Search Keyword -->
+                <div>
+                    <label for="search-input" class="block text-xs text-slate-400 mb-1.5 font-medium">🔍 종목명 / 종목코드 검색</label>
+                    <div class="relative">
+                        <input type="text" id="search-input" oninput="applyFilters()" placeholder="예: KODEX, 069500, 미국S&P" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-all placeholder-slate-500">
+                    </div>
+                </div>
+
+                <!-- Brand Filter Dropdown/Checkbox Container -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">🏢 운용사 브랜드 선택</label>
+                    <div class="relative">
+                        <button type="button" onclick="toggleDropdown('brand-dropdown')" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 flex items-center justify-between focus:outline-none focus:border-blue-500">
+                            <span id="brand-selected-label" class="truncate">전체 브랜드 선택됨</span>
+                            <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+                        </button>
+                        <div id="brand-dropdown" class="hidden absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-30 p-2 max-h-48 overflow-y-auto custom-scrollbar">
+                            <div id="brand-options-container" class="space-y-1"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Theme Filter Dropdown -->
+                <div>
+                    <label class="block text-xs text-slate-400 mb-1.5 font-medium">🏷️ 자산 / 테마 유형 선택</label>
+                    <div class="relative">
+                        <button type="button" onclick="toggleDropdown('theme-dropdown')" class="w-full bg-slate-900/80 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 flex items-center justify-between focus:outline-none focus:border-blue-500">
+                            <span id="theme-selected-label" class="truncate">전체 테마 선택됨</span>
+                            <i class="fa-solid fa-chevron-down text-xs text-slate-400"></i>
+                        </button>
+                        <div id="theme-dropdown" class="hidden absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-30 p-2 max-h-48 overflow-y-auto custom-scrollbar">
+                            <div id="theme-options-container" class="space-y-1"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slider Ranges -->
+                <div class="space-y-2">
+                    <div>
+                        <div class="flex justify-between text-xs text-slate-400 mb-1">
+                            <span>시가총액 최소 (억원)</span>
+                            <span id="min-market-val" class="text-blue-400 font-semibold">0 억</span>
+                        </div>
+                        <input type="range" id="min-market-slider" min="0" max="100000" step="100" value="0" oninput="applyFilters()" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-slate-700/80">
+            <nav class="flex space-x-2 sm:space-x-4 overflow-x-auto custom-scrollbar" aria-label="Tabs">
+                <button onclick="switchTab('tab1')" id="tab1-btn" class="tab-btn active px-4 py-3 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-chart-pie"></i> 1. 시장 개요 & 브랜드 점유율
+                </button>
+                <button onclick="switchTab('tab2')" id="tab2-btn" class="tab-btn text-slate-400 hover:text-slate-200 px-4 py-3 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-diagram-project"></i> 2. 상관관계 & NAV 괴리율
+                </button>
+                <button onclick="switchTab('tab3')" id="tab3-btn" class="tab-btn text-slate-400 hover:text-slate-200 px-4 py-3 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-trophy"></i> 3. 랭킹 & 심층 EDA
+                </button>
+                <button onclick="switchTab('tab4')" id="tab4-btn" class="tab-btn text-slate-400 hover:text-slate-200 px-4 py-3 text-sm font-semibold rounded-t-lg transition-all flex items-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-table-list"></i> 4. 실시간 원본 데이터
+                </button>
+            </nav>
+        </div>
+
+        <!-- Tab 1: Market Overview -->
+        <section id="tab1" class="tab-content space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Treemap -->
+                <div class="glass-panel p-4 rounded-xl flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-square-poll-vertical text-blue-400"></i>
+                        <span>🏢 브랜드별 시가총액 점유율 (Treemap)</span>
+                    </h3>
+                    <div id="chart-treemap" class="w-full h-80"></div>
+                </div>
+
+                <!-- Theme Bar -->
+                <div class="glass-panel p-4 rounded-xl flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-tags text-indigo-400"></i>
+                        <span>🏷️ 자산 / 테마 유형별 시가총액 분포</span>
+                    </h3>
+                    <div id="chart-theme-bar" class="w-full h-80"></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Change Rate Dist -->
+                <div class="glass-panel p-4 rounded-xl flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-emerald-400"></i>
+                        <span>📈 당일 등락률(%) 분포</span>
+                    </h3>
+                    <div id="chart-change-hist" class="w-full h-80"></div>
+                </div>
+
+                <!-- Top 15 Market Cap -->
+                <div class="glass-panel p-4 rounded-xl flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-ranking-star text-amber-400"></i>
+                        <span>🏆 시가총액 상위 15개 종목</span>
+                    </h3>
+                    <div id="chart-top15-mkt" class="w-full h-80"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 2: Correlation & NAV Gap -->
+        <section id="tab2" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-4 rounded-xl">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                    <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-circle-nodes text-purple-400"></i>
+                        <span>🌌 시가총액 vs 당일 거래대금 상관관계 산점도</span>
+                    </h3>
+                    <label class="inline-flex items-center cursor-pointer text-xs text-slate-300 gap-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-700">
+                        <input type="checkbox" id="toggle-log-scale" onchange="renderScatterPlot()" checked class="sr-only peer">
+                        <div class="relative w-8 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span>Log Scale 축 적용</span>
+                    </label>
+                </div>
+                <div id="chart-scatter" class="w-full h-96"></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- NAV Gap Dist -->
+                <div class="glass-panel p-4 rounded-xl flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-scale-unbalanced-flip text-teal-400"></i>
+                        <span>⚖️ NAV 괴리율 (%) 분포</span>
+                    </h3>
+                    <div id="chart-nav-gap-dist" class="w-full h-80"></div>
+                </div>
+
+                <!-- 3M Earn vs Change Rate -->
+                <div class="glass-panel p-4 rounded-xl flex flex-col">
+                    <h3 class="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-trend-up text-pink-400"></i>
+                        <span>📅 3개월 수익률 vs 당일 등락률 교차 분석</span>
+                    </h3>
+                    <div id="chart-earn-scatter" class="w-full h-80"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 3: Rankings -->
+        <section id="tab3" class="tab-content hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Top Rise -->
+                <div class="glass-panel p-4 rounded-xl">
+                    <h3 class="text-sm font-semibold text-rose-400 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-up-right-dots"></i>
+                        <span>🔥 당일 상승률 Top 10</span>
+                    </h3>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-xs text-left text-slate-300">
+                            <thead class="bg-slate-900/80 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="p-2.5">코드</th>
+                                    <th class="p-2.5">종목명</th>
+                                    <th class="p-2.5 text-right">현재가</th>
+                                    <th class="p-2.5 text-right">등락률</th>
+                                    <th class="p-2.5 text-right">시가총액</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rank-rise-tbody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Top Fall -->
+                <div class="glass-panel p-4 rounded-xl">
+                    <h3 class="text-sm font-semibold text-blue-400 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-arrow-down-right-dots"></i>
+                        <span>🔻 당일 하락률 Top 10</span>
+                    </h3>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-xs text-left text-slate-300">
+                            <thead class="bg-slate-900/80 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="p-2.5">코드</th>
+                                    <th class="p-2.5">종목명</th>
+                                    <th class="p-2.5 text-right">현재가</th>
+                                    <th class="p-2.5 text-right">등락률</th>
+                                    <th class="p-2.5 text-right">시가총액</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rank-fall-tbody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Top Amount -->
+                <div class="glass-panel p-4 rounded-xl">
+                    <h3 class="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-money-bill-wave"></i>
+                        <span>💸 당일 거래대금 Top 10</span>
+                    </h3>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-xs text-left text-slate-300">
+                            <thead class="bg-slate-900/80 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="p-2.5">코드</th>
+                                    <th class="p-2.5">종목명</th>
+                                    <th class="p-2.5 text-right">현재가</th>
+                                    <th class="p-2.5 text-right">거래대금</th>
+                                    <th class="p-2.5 text-right">거래량</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rank-amount-tbody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- NAV Gap High -->
+                <div class="glass-panel p-4 rounded-xl">
+                    <h3 class="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-scale-unbalanced"></i>
+                        <span>🔺 NAV 대비 고평가 Top 10 (괴리율 > 0)</span>
+                    </h3>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-xs text-left text-slate-300">
+                            <thead class="bg-slate-900/80 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="p-2.5">코드</th>
+                                    <th class="p-2.5">종목명</th>
+                                    <th class="p-2.5 text-right">현재가</th>
+                                    <th class="p-2.5 text-right">NAV</th>
+                                    <th class="p-2.5 text-right">괴리율</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rank-nav-high-tbody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tab 4: Live Raw Data Table -->
+        <section id="tab4" class="tab-content hidden glass-panel p-4 sm:p-5 rounded-xl space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div>
+                    <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                        <i class="fa-solid fa-table text-blue-400"></i>
+                        <span>📋 실시간 전처리 데이터 테이블</span>
+                    </h3>
+                    <p class="text-xs text-slate-400 mt-0.5">로컬 파일 저장 없이 메모리 상에서 실시간 가공된 전체 ETF 종목 데이터</p>
+                </div>
+                <div class="text-xs text-slate-400">
+                    총 <span id="table-row-count" class="text-blue-400 font-bold">0</span> 개 표시 중
+                </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-[600px] custom-scrollbar border border-slate-800 rounded-lg">
+                <table class="w-full text-xs text-left text-slate-300">
+                    <thead class="bg-slate-900 sticky top-0 z-10 text-slate-400 font-semibold border-b border-slate-800">
+                        <tr>
+                            <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('itemcode')">종목코드 <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('itemname')">종목명 <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('brand')">브랜드 <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 cursor-pointer hover:text-white" onclick="sortTable('theme')">자산/테마 <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('nowVal')">현재가(원) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('changeVal')">대비(원) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('changeRate')">등락률(%) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('nav')">NAV(원) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('nav_gap_rate')">NAV 괴리율(%) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('threeMonthEarnRate')">3개월 수익률(%) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('quant')">거래량(주) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('amount_uk')">거래대금(억원) <i class="fa-solid fa-sort"></i></th>
+                            <th class="p-3 text-right cursor-pointer hover:text-white" onclick="sortTable('marketSum')">시가총액(억원) <i class="fa-solid fa-sort"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody id="raw-data-tbody" class="divide-y divide-slate-800/80 bg-slate-900/40"></tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="glass-panel mt-10 py-6 px-6 text-center text-xs text-slate-500 border-t border-slate-800">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div>
+                <span>네이버 금융 실시간 API 데이터 기반 탐색적 데이터 분석(EDA) 대시보드</span>
+            </div>
+            <div>
+                <span>GitHub Pages 배포 전용 정적 웹 애플리케이션</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Data Engine & Logic -->
+    <script>
+        // Global State
+        let rawEtfData = [];
+        let filteredEtfData = [];
+        let sortKey = 'marketSum';
+        let sortAsc = false;
+        let activeTab = 'tab1';
+
+        // Known Brand List
+        const KNOWN_BRANDS = [
+            'KODEX', 'TIGER', 'ACE', 'RISE', 'SOL', 'PLUS', 'HANARO', 'KOSEF',
+            'WOORI', 'TIMEFOLIO', 'HERO', 'ARIRANG', 'KBSTAR', 'FOCUS', 'UNICORN',
+            'WON', 'FIRST', 'KoAct', 'TRUSTON', 'Mighty', 'HK', '파워'
+        ];
+
+        // Brand Extraction Logic
+        function extractBrand(itemname) {
+            if (!itemname) return '기타';
+            const tokens = itemname.trim().split(/\s+/);
+            if (tokens.length > 0) {
+                const firstToken = tokens[0].toUpperCase();
+                for (let b of KNOWN_BRANDS) {
+                    if (firstToken === b.toUpperCase()) {
+                        return b;
+                    }
+                }
+            }
+            return '기타';
+        }
+
+        // Theme Classification Logic
+        function classifyTheme(itemname) {
+            if (!itemname) return '기타 주식/테마';
+            const nameUpper = itemname.toUpperCase();
+
+            if (['2X', '레버리지', '인버스', '선물'].some(k => nameUpper.includes(k))) {
+                return '레버리지/인버스';
+            }
+            if (['채권', 'KTB', '국고채', '통안채', 'CD금리', 'KOFR', 'SOFR', '금리', '액티브채권'].some(k => nameUpper.includes(k))) {
+                return '채권/금리';
+            }
+            if (['커버드콜', '옵션', '타겟위클리', '타깃일간'].some(k => nameUpper.includes(k))) {
+                return '커버드콜/파생';
+            }
+            if (['미국', 'S&P500', '나스닥', 'NASDAQ', '차이나', '중국', '글로벌', '일본', 'TOPIX', '베트남', '인도'].some(k => nameUpper.includes(k))) {
+                return '해외주식';
+            }
+            if (['반도체', 'SOXX', 'AI', '인공지능', '테크', '빅테크', '소프트웨어'].some(k => nameUpper.includes(k))) {
+                return '반도체/AI/IT';
+            }
+            if (['2차전지', '배터리', '전기차'].some(k => nameUpper.includes(k))) {
+                return '2차전지/전기차';
+            }
+            if (['배당', '고배당', 'DIVIDEND', 'SCHD', '리츠'].some(k => nameUpper.includes(k))) {
+                return '배당/리츠';
+            }
+            if (['바이오', '헬스케어', '제약'].some(k => nameUpper.includes(k))) {
+                return '바이오/헬스케어';
+            }
+            if (['조선', '방산', '원자재', '원유', '골드', '금', '신재생'].some(k => nameUpper.includes(k))) {
+                return '산업/원자재';
+            }
+            if (['200', '코스닥150', 'KRX300', '대표', 'TOP10', '블루칩'].some(k => nameUpper.includes(k))) {
+                return '국내 대표지수';
+            }
+            return '기타 주식/테마';
+        }
+
+        // Fetch Live Naver ETF Data via JSONP (Cross-Origin Bypass)
+        function fetchLiveEtfData() {
+            const refreshIcon = document.getElementById('refresh-icon');
+            refreshIcon.classList.add('fa-spin');
+            document.getElementById('last-updated-time').innerText = '데이터 요청 중...';
+
+            const callbackName = 'naverEtfCallback_' + Date.now();
+
+            window[callbackName] = function(response) {
+                try {
+                    if (response && response.result && response.result.etfItemList) {
+                        processEtfData(response.result.etfItemList);
+                        const nowStr = new Date().toLocaleTimeString('ko-KR');
+                        document.getElementById('last-updated-time').innerText = `최근 수집: ${nowStr}`;
+                    } else {
+                        alert('네이버 금융 API 응답 형식이 올바르지 않습니다.');
+                    }
+                } catch (err) {
+                    console.error('Data Processing Error:', err);
+                    alert('데이터 처리 중 오류가 발생했습니다.');
+                } finally {
+                    delete window[callbackName];
+                    document.head.removeChild(script);
+                    refreshIcon.classList.remove('fa-spin');
+                }
+            };
+
+            const script = document.createElement('script');
+            script.src = `https://finance.naver.com/api/sise/etfItemList.nhn?etfType=0&targetColumn=market_sum&sortOrder=desc&_callback=${callbackName}`;
+            script.onerror = function() {
+                alert('네이버 금융 API 수집에 실패했습니다. 네트워크 연결을 확인해주세요.');
+                refreshIcon.classList.remove('fa-spin');
+                document.getElementById('last-updated-time').innerText = '수집 실패';
+                delete window[callbackName];
+            };
+            document.head.appendChild(script);
+        }
+
+        // Data Preprocessing
+        function processEtfData(itemList) {
+            rawEtfData = itemList.map(item => {
+                const nowVal = parseFloat(item.nowVal) || 0;
+                const changeVal = parseFloat(item.changeVal) || 0;
+                const changeRate = parseFloat(item.changeRate) || 0;
+                const nav = parseFloat(item.nav) || 0;
+                const threeMonthEarnRate = parseFloat(item.threeMonthEarnRate) || 0;
+                const quant = parseFloat(item.quant) || 0;
+                const amonut = parseFloat(item.amonut) || 0;
+                const marketSum = parseFloat(item.marketSum) || 0;
+
+                const amount_uk = amonut / 100.0;
+                const nav_gap_rate = (nav > 0) ? ((nowVal - nav) / nav * 100.0) : 0.0;
+                const brand = extractBrand(item.itemname);
+                const theme = classifyTheme(item.itemname);
+
+                return {
+                    itemcode: item.itemcode || '',
+                    itemname: item.itemname || '',
+                    brand: brand,
+                    theme: theme,
+                    nowVal: nowVal,
+                    changeVal: changeVal,
+                    changeRate: changeRate,
+                    nav: nav,
+                    nav_gap_rate: nav_gap_rate,
+                    threeMonthEarnRate: threeMonthEarnRate,
+                    quant: quant,
+                    amount_uk: amount_uk,
+                    marketSum: marketSum,
+                    risefall: item.risefall || '3'
+                };
+            });
+
+            initFilterControls();
+            applyFilters();
+        }
+
+        // Initialize Dynamic Filter Dropdowns
+        function initFilterControls() {
+            const brands = Array.from(new Set(rawEtfData.map(d => d.brand))).sort();
+            const brandContainer = document.getElementById('brand-options-container');
+            brandContainer.innerHTML = `
+                <label class="flex items-center gap-2 text-xs text-slate-300 p-1 hover:bg-slate-700/50 rounded cursor-pointer font-semibold">
+                    <input type="checkbox" id="brand-all" checked onchange="toggleAllOptions('brand')" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+                    <span>전체 선택</span>
+                </label>
+            ` + brands.map(b => `
+                <label class="flex items-center gap-2 text-xs text-slate-300 p-1 hover:bg-slate-700/50 rounded cursor-pointer">
+                    <input type="checkbox" class="brand-checkbox rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0" value="${b}" checked onchange="applyFilters()">
+                    <span>${b}</span>
+                </label>
+            `).join('');
+
+            const themes = Array.from(new Set(rawEtfData.map(d => d.theme))).sort();
+            const themeContainer = document.getElementById('theme-options-container');
+            themeContainer.innerHTML = `
+                <label class="flex items-center gap-2 text-xs text-slate-300 p-1 hover:bg-slate-700/50 rounded cursor-pointer font-semibold">
+                    <input type="checkbox" id="theme-all" checked onchange="toggleAllOptions('theme')" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+                    <span>전체 선택</span>
+                </label>
+            ` + themes.map(t => `
+                <label class="flex items-center gap-2 text-xs text-slate-300 p-1 hover:bg-slate-700/50 rounded cursor-pointer">
+                    <input type="checkbox" class="theme-checkbox rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0" value="${t}" checked onchange="applyFilters()">
+                    <span>${t}</span>
+                </label>
+            `).join('');
+
+            // Slider max update
+            const maxMkt = Math.max(...rawEtfData.map(d => d.marketSum), 10000);
+            const slider = document.getElementById('min-market-slider');
+            slider.max = maxMkt;
+            slider.value = 0;
+            document.getElementById('min-market-val').innerText = '0 억';
+        }
+
+        function toggleDropdown(id) {
+            const dropdown = document.getElementById(id);
+            dropdown.classList.toggle('hidden');
+        }
+
+        function toggleAllOptions(type) {
+            const isChecked = document.getElementById(`${type}-all`).checked;
+            document.querySelectorAll(`.${type}-checkbox`).forEach(cb => cb.checked = isChecked);
+            applyFilters();
+        }
+
+        // Apply Filters
+        function applyFilters() {
+            const query = document.getElementById('search-input').value.trim().toUpperCase();
+            
+            const selectedBrands = Array.from(document.querySelectorAll('.brand-checkbox:checked')).map(cb => cb.value);
+            const selectedThemes = Array.from(document.querySelectorAll('.theme-checkbox:checked')).map(cb => cb.value);
+            
+            const minMarketSum = parseFloat(document.getElementById('min-market-slider').value) || 0;
+            document.getElementById('min-market-val').innerText = `${minMarketSum.toLocaleString()} 억`;
+
+            // Label updates
+            document.getElementById('brand-selected-label').innerText = selectedBrands.length === document.querySelectorAll('.brand-checkbox').length ? '전체 브랜드 선택됨' : `${selectedBrands.length}개 브랜드 선택됨`;
+            document.getElementById('theme-selected-label').innerText = selectedThemes.length === document.querySelectorAll('.theme-checkbox').length ? '전체 테마 선택됨' : `${selectedThemes.length}개 테마 선택됨`;
+
+            filteredEtfData = rawEtfData.filter(item => {
+                const matchQuery = !query || item.itemname.toUpperCase().includes(query) || item.itemcode.includes(query);
+                const matchBrand = selectedBrands.includes(item.brand);
+                const matchTheme = selectedThemes.includes(item.theme);
+                const matchMarketSum = item.marketSum >= minMarketSum;
+
+                return matchQuery && matchBrand && matchTheme && matchMarketSum;
+            });
+
+            updateKpis();
+            renderActiveTab();
+        }
+
+        function resetFilters() {
+            document.getElementById('search-input').value = '';
+            document.querySelectorAll('.brand-checkbox, .theme-checkbox').forEach(cb => cb.checked = true);
+            document.getElementById('brand-all').checked = true;
+            document.getElementById('theme-all').checked = true;
+            document.getElementById('min-market-slider').value = 0;
+            applyFilters();
+        }
+
+        // Update KPIs
+        function updateKpis() {
+            const count = filteredEtfData.length;
+            const rawCount = rawEtfData.length;
+            const marketSum = filteredEtfData.reduce((acc, cur) => acc + cur.marketSum, 0);
+            const avgRate = count > 0 ? (filteredEtfData.reduce((acc, cur) => acc + cur.changeRate, 0) / count) : 0;
+            const riseCnt = filteredEtfData.filter(d => d.changeRate > 0).length;
+            const fallCnt = filteredEtfData.filter(d => d.changeRate < 0).length;
+            const totalAmount = filteredEtfData.reduce((acc, cur) => acc + cur.amount_uk, 0);
+
+            document.getElementById('kpi-count').innerHTML = `${count.toLocaleString()} <span class="text-xs text-slate-400 font-normal">개</span>`;
+            document.getElementById('kpi-count-sub').innerText = `전체 ${rawCount.toLocaleString()}개 종목 중`;
+
+            // Format Market Sum (Jo / Uk)
+            document.getElementById('kpi-market-sum').innerHTML = formatUkWong(marketSum);
+            
+            const rateElem = document.getElementById('kpi-avg-rate');
+            rateElem.innerText = `${avgRate >= 0 ? '+' : ''}${avgRate.toFixed(2)}%`;
+            rateElem.className = `text-xl sm:text-2xl font-bold ${avgRate > 0 ? 'text-rose-400' : (avgRate < 0 ? 'text-blue-400' : 'text-slate-200')}`;
+
+            document.getElementById('kpi-rise-cnt').innerText = `${riseCnt}개`;
+            document.getElementById('kpi-fall-cnt').innerText = `${fallCnt}개`;
+            document.getElementById('kpi-total-amount').innerHTML = formatUkWong(totalAmount);
+        }
+
+        function formatUkWong(ukVal) {
+            if (Math.abs(ukVal) >= 10000) {
+                return `${(ukVal / 10000).toFixed(2)} <span class="text-xs font-normal text-slate-300">조 원</span>`;
+            }
+            return `${Math.round(ukVal).toLocaleString()} <span class="text-xs font-normal text-slate-300">억 원</span>`;
+        }
+
+        // Tab Switcher
+        function switchTab(tabId) {
+            activeTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active', 'text-blue-500'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
+
+            document.getElementById(`${tabId}-btn`).classList.add('active');
+            document.getElementById(tabId).classList.remove('hidden');
+
+            renderActiveTab();
+        }
+
+        function renderActiveTab() {
+            if (activeTab === 'tab1') {
+                renderTab1Charts();
+            } else if (activeTab === 'tab2') {
+                renderTab2Charts();
+            } else if (activeTab === 'tab3') {
+                renderTab3Rankings();
+            } else if (activeTab === 'tab4') {
+                renderTab4Table();
+            }
+        }
+
+        // Plotly Dark Layout Standard Configuration
+        const darkPlotlyLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#94a3b8', family: 'Pretendard, sans-serif', size: 11 },
+            margin: { t: 30, l: 40, r: 20, b: 40 },
+            xaxis: { gridcolor: '#334155', zerolinecolor: '#475569' },
+            yaxis: { gridcolor: '#334155', zerolinecolor: '#475569' }
+        };
+
+        // Render Tab 1 Charts
+        function renderTab1Charts() {
+            if (filteredEtfData.length === 0) return;
+
+            // 1. Treemap: Brand Share
+            const brandGroup = {};
+            filteredEtfData.forEach(d => {
+                brandGroup[d.brand] = (brandGroup[d.brand] || 0) + d.marketSum;
+            });
+            const brandNames = Object.keys(brandGroup);
+            const brandValues = Object.values(brandGroup);
+
+            const treemapData = [{
+                type: 'treemap',
+                labels: brandNames,
+                parents: brandNames.map(() => ''),
+                values: brandValues,
+                textinfo: 'label+value+percent parent',
+                hoverinfo: 'label+value',
+                marker: { colorscale: 'Blues', showscale: false }
+            }];
+            Plotly.newPlot('chart-treemap', treemapData, { ...darkPlotlyLayout, margin: { t: 10, l: 10, r: 10, b: 10 } }, { responsive: true, displayModeBar: false });
+
+            // 2. Theme Bar Chart
+            const themeGroup = {};
+            filteredEtfData.forEach(d => {
+                themeGroup[d.theme] = (themeGroup[d.theme] || 0) + d.marketSum;
+            });
+            const sortedThemes = Object.entries(themeGroup).sort((a, b) => a[1] - b[1]);
+
+            const themeData = [{
+                type: 'bar',
+                x: sortedThemes.map(t => t[1]),
+                y: sortedThemes.map(t => t[0]),
+                orientation: 'h',
+                marker: { color: '#6366f1' }
+            }];
+            Plotly.newPlot('chart-theme-bar', themeData, { ...darkPlotlyLayout, xaxis: { ...darkPlotlyLayout.xaxis, title: '시가총액 (억원)' } }, { responsive: true, displayModeBar: false });
+
+            // 3. Change Rate Histogram
+            const changeRates = filteredEtfData.map(d => d.changeRate);
+            const histData = [{
+                type: 'histogram',
+                x: changeRates,
+                nbinsx: 35,
+                marker: { color: '#3b82f6' }
+            }];
+            Plotly.newPlot('chart-change-hist', histData, { ...darkPlotlyLayout, xaxis: { ...darkPlotlyLayout.xaxis, title: '등락률 (%)' }, yaxis: { ...darkPlotlyLayout.yaxis, title: '종목 수' } }, { responsive: true, displayModeBar: false });
+
+            // 4. Top 15 Market Cap Bar
+            const top15 = [...filteredEtfData].sort((a, b) => b.marketSum - a.marketSum).slice(0, 15).reverse();
+            const top15Data = [{
+                type: 'bar',
+                x: top15.map(d => d.marketSum),
+                y: top15.map(d => d.itemname.length > 12 ? d.itemname.substring(0, 12) + '...' : d.itemname),
+                orientation: 'h',
+                marker: {
+                    color: top15.map(d => d.changeRate),
+                    colorscale: [[0, '#3b82f6'], [0.5, '#64748b'], [1, '#f43f5e']],
+                    cmin: -3,
+                    cmax: 3
+                },
+                text: top15.map(d => `${d.marketSum.toLocaleString()}억`),
+                textposition: 'auto'
+            }];
+            Plotly.newPlot('chart-top15-mkt', top15Data, { ...darkPlotlyLayout, xaxis: { ...darkPlotlyLayout.xaxis, title: '시가총액 (억원)' } }, { responsive: true, displayModeBar: false });
+        }
+
+        // Render Tab 2 Charts
+        function renderTab2Charts() {
+            renderScatterPlot();
+
+            if (filteredEtfData.length === 0) return;
+
+            // NAV Gap Histogram
+            const navGaps = filteredEtfData.map(d => d.nav_gap_rate);
+            const navHistData = [{
+                type: 'histogram',
+                x: navGaps,
+                nbinsx: 40,
+                marker: { color: '#10b981' }
+            }];
+            Plotly.newPlot('chart-nav-gap-dist', navHistData, { ...darkPlotlyLayout, xaxis: { ...darkPlotlyLayout.xaxis, title: 'NAV 괴리율 (%)' }, yaxis: { ...darkPlotlyLayout.yaxis, title: '종목 수' } }, { responsive: true, displayModeBar: false });
+
+            // 3M Earn vs Change Rate Scatter
+            const earnScatterData = [{
+                type: 'scatter',
+                mode: 'markers',
+                x: filteredEtfData.map(d => d.threeMonthEarnRate),
+                y: filteredEtfData.map(d => d.changeRate),
+                text: filteredEtfData.map(d => `${d.itemname} (${d.brand})`),
+                marker: { size: 7, color: '#ec4899', opacity: 0.7 }
+            }];
+            Plotly.newPlot('chart-earn-scatter', earnScatterData, { ...darkPlotlyLayout, xaxis: { ...darkPlotlyLayout.xaxis, title: '3개월 수익률 (%)' }, yaxis: { ...darkPlotlyLayout.yaxis, title: '당일 등락률 (%)' } }, { responsive: true, displayModeBar: false });
+        }
+
+        function renderScatterPlot() {
+            if (filteredEtfData.length === 0) return;
+
+            const useLog = document.getElementById('toggle-log-scale').checked;
+            const scatterData = [{
+                type: 'scatter',
+                mode: 'markers',
+                x: filteredEtfData.map(d => d.marketSum),
+                y: filteredEtfData.map(d => d.amount_uk),
+                text: filteredEtfData.map(d => `<b>${d.itemname}</b><br>시총: ${d.marketSum.toLocaleString()}억<br>거래대금: ${d.amount_uk.toFixed(1)}억<br>등락률: ${d.changeRate}%`),
+                marker: {
+                    size: filteredEtfData.map(d => Math.max(Math.sqrt(d.quant) / 40, 6)),
+                    color: filteredEtfData.map(d => d.changeRate),
+                    colorscale: 'Portland',
+                    showscale: true,
+                    colorbar: { title: '등락률(%)', len: 0.8 }
+                }
+            }];
+
+            const scatterLayout = {
+                ...darkPlotlyLayout,
+                xaxis: { ...darkPlotlyLayout.xaxis, title: '시가총액 (억원)', type: useLog ? 'log' : 'linear' },
+                yaxis: { ...darkPlotlyLayout.yaxis, title: '거래대금 (억원)', type: useLog ? 'log' : 'linear' }
+            };
+
+            Plotly.newPlot('chart-scatter', scatterData, scatterLayout, { responsive: true, displayModeBar: false });
+        }
+
+        // Render Tab 3 Rankings
+        function renderTab3Rankings() {
+            if (filteredEtfData.length === 0) return;
+
+            // 1. Top Rise
+            const topRise = [...filteredEtfData].sort((a, b) => b.changeRate - a.changeRate).slice(0, 10);
+            document.getElementById('rank-rise-tbody').innerHTML = topRise.map(d => `
+                <tr class="hover:bg-slate-800/50">
+                    <td class="p-2.5 font-mono text-slate-400">${d.itemcode}</td>
+                    <td class="p-2.5 font-medium text-slate-100">${d.itemname}</td>
+                    <td class="p-2.5 text-right">${d.nowVal.toLocaleString()} 원</td>
+                    <td class="p-2.5 text-right font-bold text-rose-400">+${d.changeRate.toFixed(2)}%</td>
+                    <td class="p-2.5 text-right">${d.marketSum.toLocaleString()} 억</td>
+                </tr>
+            `).join('');
+
+            // 2. Top Fall
+            const topFall = [...filteredEtfData].sort((a, b) => a.changeRate - b.changeRate).slice(0, 10);
+            document.getElementById('rank-fall-tbody').innerHTML = topFall.map(d => `
+                <tr class="hover:bg-slate-800/50">
+                    <td class="p-2.5 font-mono text-slate-400">${d.itemcode}</td>
+                    <td class="p-2.5 font-medium text-slate-100">${d.itemname}</td>
+                    <td class="p-2.5 text-right">${d.nowVal.toLocaleString()} 원</td>
+                    <td class="p-2.5 text-right font-bold text-blue-400">${d.changeRate.toFixed(2)}%</td>
+                    <td class="p-2.5 text-right">${d.marketSum.toLocaleString()} 억</td>
+                </tr>
+            `).join('');
+
+            // 3. Top Amount
+            const topAmount = [...filteredEtfData].sort((a, b) => b.amount_uk - a.amount_uk).slice(0, 10);
+            document.getElementById('rank-amount-tbody').innerHTML = topAmount.map(d => `
+                <tr class="hover:bg-slate-800/50">
+                    <td class="p-2.5 font-mono text-slate-400">${d.itemcode}</td>
+                    <td class="p-2.5 font-medium text-slate-100">${d.itemname}</td>
+                    <td class="p-2.5 text-right">${d.nowVal.toLocaleString()} 원</td>
+                    <td class="p-2.5 text-right font-bold text-amber-400">${d.amount_uk.toFixed(1)} 억</td>
+                    <td class="p-2.5 text-right">${Math.round(d.quant).toLocaleString()} 주</td>
+                </tr>
+            `).join('');
+
+            // 4. NAV High Overpriced
+            const topNavHigh = [...filteredEtfData].filter(d => d.nav > 0).sort((a, b) => b.nav_gap_rate - a.nav_gap_rate).slice(0, 10);
+            document.getElementById('rank-nav-high-tbody').innerHTML = topNavHigh.map(d => `
+                <tr class="hover:bg-slate-800/50">
+                    <td class="p-2.5 font-mono text-slate-400">${d.itemcode}</td>
+                    <td class="p-2.5 font-medium text-slate-100">${d.itemname}</td>
+                    <td class="p-2.5 text-right">${d.nowVal.toLocaleString()} 원</td>
+                    <td class="p-2.5 text-right">${d.nav.toFixed(2)} 원</td>
+                    <td class="p-2.5 text-right font-bold text-emerald-400">+${d.nav_gap_rate.toFixed(2)}%</td>
+                </tr>
+            `).join('');
+        }
+
+        // Render Tab 4 Raw Data Table
+        function renderTab4Table() {
+            document.getElementById('table-row-count').innerText = filteredEtfData.length.toLocaleString();
+
+            const sortedData = [...filteredEtfData].sort((a, b) => {
+                let valA = a[sortKey];
+                let valB = b[sortKey];
+                if (typeof valA === 'string') {
+                    return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                return sortAsc ? valA - valB : valB - valA;
+            });
+
+            const tbody = document.getElementById('raw-data-tbody');
+            tbody.innerHTML = sortedData.map(d => `
+                <tr class="hover:bg-slate-800/60 transition-colors">
+                    <td class="p-3 font-mono text-slate-400">${d.itemcode}</td>
+                    <td class="p-3 font-semibold text-slate-100">${d.itemname}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded bg-blue-950 text-blue-300 text-[11px] border border-blue-800/50">${d.brand}</span></td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px]">${d.theme}</span></td>
+                    <td class="p-3 text-right font-medium">${d.nowVal.toLocaleString()} 원</td>
+                    <td class="p-3 text-right font-medium ${d.changeVal > 0 ? 'text-rose-400' : (d.changeVal < 0 ? 'text-blue-400' : 'text-slate-400')}">${d.changeVal > 0 ? '+' : ''}${d.changeVal.toLocaleString()} 원</td>
+                    <td class="p-3 text-right font-bold ${d.changeRate > 0 ? 'text-rose-400' : (d.changeRate < 0 ? 'text-blue-400' : 'text-slate-400')}">${d.changeRate > 0 ? '+' : ''}${d.changeRate.toFixed(2)}%</td>
+                    <td class="p-3 text-right text-slate-400">${d.nav > 0 ? d.nav.toFixed(2) + ' 원' : '-'}</td>
+                    <td class="p-3 text-right font-medium ${d.nav_gap_rate > 0 ? 'text-emerald-400' : (d.nav_gap_rate < 0 ? 'text-purple-400' : 'text-slate-400')}">${d.nav_gap_rate.toFixed(2)}%</td>
+                    <td class="p-3 text-right text-slate-300">${d.threeMonthEarnRate.toFixed(2)}%</td>
+                    <td class="p-3 text-right text-slate-400">${Math.round(d.quant).toLocaleString()} 주</td>
+                    <td class="p-3 text-right font-medium text-amber-300">${d.amount_uk.toFixed(1)} 억</td>
+                    <td class="p-3 text-right font-bold text-slate-100">${d.marketSum.toLocaleString()} 억</td>
+                </tr>
+            `).join('');
+        }
+
+        function sortTable(key) {
+            if (sortKey === key) {
+                sortAsc = !sortAsc;
+            } else {
+                sortKey = key;
+                sortAsc = false;
+            }
+            renderTab4Table();
+        }
+
+        // Export Filtered Data to CSV
+        function exportToCSV() {
+            if (filteredEtfData.length === 0) {
+                alert('다운로드할 데이터가 없습니다.');
+                return;
+            }
+
+            const headers = ['종목코드', '종목명', '브랜드', '자산테마', '현재가', '대비', '등락률', 'NAV', 'NAV괴리율', '3개월수익률', '거래량', '거래대금_억원', '시가총액_억원'];
+            const rows = filteredEtfData.map(d => [
+                `"${d.itemcode}"`,
+                `"${d.itemname.replace(/"/g, '""')}"`,
+                `"${d.brand}"`,
+                `"${d.theme}"`,
+                d.nowVal,
+                d.changeVal,
+                d.changeRate,
+                d.nav,
+                d.nav_gap_rate.toFixed(2),
+                d.threeMonthEarnRate,
+                d.quant,
+                d.amount_uk.toFixed(2),
+                d.marketSum
+            ]);
+
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Naver_ETF_Realtime_EDA_${new Date().toISOString().slice(0,10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Close Dropdowns on Click Outside
+        window.addEventListener('click', function(e) {
+            if (!e.target.closest('#brand-dropdown') && !e.target.closest('button[onclick*="brand-dropdown"]')) {
+                document.getElementById('brand-dropdown').classList.add('hidden');
+            }
+            if (!e.target.closest('#theme-dropdown') && !e.target.closest('button[onclick*="theme-dropdown"]')) {
+                document.getElementById('theme-dropdown').classList.add('hidden');
+            }
+        });
+
+        // Initialize App on Page Load
+        window.addEventListener('DOMContentLoaded', () => {
+            fetchLiveEtfData();
+        });
+    </script>
+</body>
+</html>
