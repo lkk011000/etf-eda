@@ -237,20 +237,16 @@ def main() -> None:
 
         # 브랜드별 시가총액 점유율 (Treemap)
         with row1_col1:
-            st.markdown("##### 🏢 브랜드별 시가총액 점유율 (Treemap)")
-            brand_summary = filtered_df.groupby('brand').agg(
-                marketSum_total=('marketSum', 'sum'),
-                item_count=('itemcode', 'count')
-            ).reset_index()
-
+            st.markdown("##### 🏢 브랜드 & 세부 종목별 시가총액 계층 트리맵 (Treemap)")
             fig_treemap = px.treemap(
-                brand_summary,
-                path=['brand'],
-                values='marketSum_total',
-                color='marketSum_total',
-                color_continuous_scale='Blues',
-                hover_data={'item_count': True, 'marketSum_total': ':,.0f'},
-                labels={'marketSum_total': '시가총액(억원)', 'item_count': '종목 수', 'brand': '브랜드'}
+                filtered_df,
+                path=['brand', 'itemname'],
+                values='marketSum',
+                color='changeRate',
+                color_continuous_scale='RdBu_r',
+                color_continuous_midpoint=0,
+                hover_data=['itemcode', 'nowVal', 'marketSum', 'changeRate'],
+                labels={'marketSum': '시가총액(억원)', 'changeRate': '등락률(%)', 'brand': '브랜드', 'itemname': '종목명'}
             )
             fig_treemap.update_layout(margin=dict(t=20, l=10, r=10, b=10))
             st.plotly_chart(fig_treemap, use_container_width=True)

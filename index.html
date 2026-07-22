@@ -411,10 +411,11 @@
                     </div>
                 </div>
 
-                <!-- NAV Gap High -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- NAV Gap High (Overpriced) -->
                 <div class="glass-panel p-4 rounded-xl">
                     <h3 class="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
-                        <i class="fa-solid fa-scale-unbalanced"></i>
+                        <i class="fa-solid fa-scale-unbalanced-flip"></i>
                         <span>🔺 NAV 대비 고평가 Top 10 (괴리율 > 0)</span>
                     </h3>
                     <div class="overflow-x-auto custom-scrollbar">
@@ -429,6 +430,28 @@
                                 </tr>
                             </thead>
                             <tbody id="rank-nav-high-tbody" class="divide-y divide-slate-800"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- NAV Gap Low (Discounted) -->
+                <div class="glass-panel p-4 rounded-xl">
+                    <h3 class="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-scale-unbalanced"></i>
+                        <span>🔻 NAV 대비 저평가 Top 10 (괴리율 < 0)</span>
+                    </h3>
+                    <div class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-xs text-left text-slate-300">
+                            <thead class="bg-slate-900/80 text-slate-400 uppercase">
+                                <tr>
+                                    <th class="p-2.5">코드</th>
+                                    <th class="p-2.5">종목명</th>
+                                    <th class="p-2.5 text-right">현재가</th>
+                                    <th class="p-2.5 text-right">NAV</th>
+                                    <th class="p-2.5 text-right">괴리율</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rank-nav-low-tbody" class="divide-y divide-slate-800"></tbody>
                         </table>
                     </div>
                 </div>
@@ -789,22 +812,61 @@
         function renderTab1Charts() {
             if (filteredEtfData.length === 0) return;
 
-            // 1. Treemap: Brand Share
-            const brandGroup = {};
+            // 1. Treemap: Brand & Item 2-Level Hierarchy
+            const ids = [];
+            const labels = [];
+            const parents = [];
+            const values = [];
+            const colors = [];
+            const hovertexts = [];
+
+            const brandMarketSum = {};
+            const brandChangeSum = {};
+            const brandItemCount = {};
+
             filteredEtfData.forEach(d => {
-                brandGroup[d.brand] = (brandGroup[d.brand] || 0) + d.marketSum;
+                brandMarketSum[d.brand] = (brandMarketSum[d.brand] || 0) + d.marketSum;
+                brandChangeSum[d.brand] = (brandChangeSum[d.brand] || 0) + (d.changeRate * d.marketSum);
+                brandItemCount[d.brand] = (brandItemCount[d.brand] || 0) + 1;
             });
-            const brandNames = Object.keys(brandGroup);
-            const brandValues = Object.values(brandGroup);
+
+            Object.keys(brandMarketSum).forEach(b => {
+                ids.push(b);
+                labels.push(`<b>${b}</b>`);
+                parents.push('');
+                values.push(brandMarketSum[b]);
+                const avgChange = brandMarketSum[b] > 0 ? (brandChangeSum[b] / brandMarketSum[b]) : 0;
+                colors.push(avgChange);
+                hovertexts.push(`<b>${b} 브랜드 전체</b><br>총 시가총액: ${Math.round(brandMarketSum[b]).toLocaleString()}억원<br>종목 수: ${brandItemCount[b]}개<br>가중평균 등락률: ${avgChange >= 0 ? '+' : ''}${avgChange.toFixed(2)}%`);
+            });
+
+            filteredEtfData.forEach(d => {
+                const itemId = `${d.brand}_${d.itemcode}`;
+                ids.push(itemId);
+                labels.push(d.itemname);
+                parents.push(d.brand);
+                values.push(d.marketSum);
+                colors.push(d.changeRate);
+                hovertexts.push(`<b>${d.itemname}</b> (${d.itemcode})<br>운용사: ${d.brand}<br>시가총액: ${d.marketSum.toLocaleString()}억원<br>현재가: ${d.nowVal.toLocaleString()}원<br>등락률: ${d.changeRate >= 0 ? '+' : ''}${d.changeRate.toFixed(2)}%`);
+            });
 
             const treemapData = [{
                 type: 'treemap',
-                labels: brandNames,
-                parents: brandNames.map(() => ''),
-                values: brandValues,
-                textinfo: 'label+value+percent parent',
-                hoverinfo: 'label+value',
-                marker: { colorscale: 'Blues', showscale: false }
+                ids: ids,
+                labels: labels,
+                parents: parents,
+                values: values,
+                hovertext: hovertexts,
+                hoverinfo: 'text',
+                textinfo: 'label+value',
+                marker: {
+                    colors: colors,
+                    colorscale: [[0, '#3b82f6'], [0.5, '#64748b'], [1, '#f43f5e']],
+                    cmin: -3,
+                    cmax: 3,
+                    showscale: true,
+                    colorbar: { title: '등락률(%)', len: 0.8 }
+                }
             }];
             Plotly.newPlot('chart-treemap', treemapData, { ...darkPlotlyLayout, margin: { t: 10, l: 10, r: 10, b: 10 } }, { responsive: true, displayModeBar: false });
 
@@ -958,6 +1020,18 @@
                     <td class="p-2.5 text-right">${d.nowVal.toLocaleString()} 원</td>
                     <td class="p-2.5 text-right">${d.nav.toFixed(2)} 원</td>
                     <td class="p-2.5 text-right font-bold text-emerald-400">+${d.nav_gap_rate.toFixed(2)}%</td>
+                </tr>
+            `).join('');
+
+            // 5. NAV Low Discounted
+            const topNavLow = [...filteredEtfData].filter(d => d.nav > 0).sort((a, b) => a.nav_gap_rate - b.nav_gap_rate).slice(0, 10);
+            document.getElementById('rank-nav-low-tbody').innerHTML = topNavLow.map(d => `
+                <tr class="hover:bg-slate-800/50">
+                    <td class="p-2.5 font-mono text-slate-400">${d.itemcode}</td>
+                    <td class="p-2.5 font-medium text-slate-100">${d.itemname}</td>
+                    <td class="p-2.5 text-right">${d.nowVal.toLocaleString()} 원</td>
+                    <td class="p-2.5 text-right">${d.nav.toFixed(2)} 원</td>
+                    <td class="p-2.5 text-right font-bold text-purple-400">${d.nav_gap_rate.toFixed(2)}%</td>
                 </tr>
             `).join('');
         }
